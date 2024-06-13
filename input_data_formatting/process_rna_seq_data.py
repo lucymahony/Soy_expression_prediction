@@ -137,7 +137,7 @@ def generate_experiment_dict(bn, tissue, name, data_path):
     s_numbers = get_s_numbers(metadata_path, tissue)
     matrix = tpm_matrix(tpm_path)
     print(f'This is the head of {name} expression matrix {matrix.head()}')
-    average = average_expression_matrix(matrix, s_numbers)
+    average = average_expression_matrix(matrix, s_numbers) 
     experiment = {'name' : name, 
                   's_numbers': s_numbers,
                   'tpm_matrix': matrix,
