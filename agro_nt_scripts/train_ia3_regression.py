@@ -12,6 +12,8 @@ from transformers import EarlyStoppingCallback, set_seed # I added this
 import sklearn
 import numpy as np
 from torch.utils.data import Dataset
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
 
 from peft import (
     LoraConfig,
@@ -54,8 +56,7 @@ class TrainingArguments(transformers.TrainingArguments):
     weight_decay: float = field(default=0.01)
     learning_rate: float = field(default=1e-4)
     save_total_limit: int = field(default=3)
-    load_best_model_at_end: bool = field(default=True)
-    # metric_for_best_model: str = field(default="eval_f1") # I added this  
+    load_best_model_at_end: bool = field(default=True) 
     output_dir: str = field(default="output")
     find_unused_parameters: bool = field(default=False)
     checkpointing: bool = field(default=False)
@@ -196,8 +197,16 @@ def compute_metrics(eval_pred):
     #return calculate_metric_with_sklearn(logits, labels)
     logits = logits.flatten()  # Flatten logits for regression
     labels = labels.flatten()  # Flatten labels for regression
-    mse = ((logits - labels) ** 2).mean().item()
-    return {"mse": mse}
+    mse = mean_squared_error(labels, logits)
+    mae = mean_absolute_error(labels, logits)
+    r2 = r2_score(labels, logits)
+    rmse = np.sqrt(mse)
+    return {
+        "mse": mse,
+        "mae": mae,
+        "r2": r2,
+        "rmse": rmse
+    }
 
 def model_init():
     # load model
@@ -206,9 +215,7 @@ def model_init():
         cache_dir=training_args.cache_dir,
         num_labels=train_dataset.num_labels,
         trust_remote_code=True,
-    )
-
-        
+    )        
     return model
 
 

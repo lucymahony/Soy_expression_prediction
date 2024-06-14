@@ -6,7 +6,7 @@ num_gpu=1
 per_device_batch_size=2
 gradient_acc_steps=16 # 16 * 2=global batch size of 32
 lr=3e-7
-train_epochs=6
+train_epochs=12
 save_steps=500
 eval_steps=500 
 warmup_steps=50 
@@ -16,7 +16,7 @@ logging_steps=500
 training_script=/home/u10093927/workspace/dagw/Soybean/src/Soy_expression_prediction/agro_nt_scripts/train_ia3_regression.py
 model=/home/u10093927/workspace/dagw/DNABERT2/src/agro-nucleotide-transformer-1b
 data=/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42
-outdir=/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42
+outdir=/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42_${lr}
 
 echo "RUNNING SCRIPT"
 qig conda run -n transformers torchrun --nproc_per_node=${num_gpu} ${training_script} \
