@@ -7,7 +7,7 @@ from Bio import SeqIO
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import sys 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from process_rna_seq_data import tpm_matrix, average_expression_matrix, get_s_numbers
@@ -51,7 +51,14 @@ def split_datasets(df, y_column, random_state):
     X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.1, random_state=random_state)
     # Split the temporary test set into dev and test
     X_train, X_dev, y_train, y_dev = train_test_split(X_temp, y_temp, test_size=0.1, random_state=random_state)
-    return X_train, X_dev, X_test
+
+
+    # Trying 
+    temp, test = train_test_split(df, test_size=0.1, random_state=random_state)
+    train, dev = train_test_split(temp, test_size=0.1, random_state=random_state )
+
+    #return X_train, X_dev, X_test
+    return train, dev, test
 
 
 def write_promoter_and_transcript_to_csv(df, y_column, promoter_dictionary, transcript_dictionary, output_file_names, random_state, prom_name_ending):
@@ -61,7 +68,7 @@ def write_promoter_and_transcript_to_csv(df, y_column, promoter_dictionary, tran
     The label is the expression scalled between 0 and 1, The scalling is performed independently in test dev and train to prevent data leakage 
     :return: None
     """
-
+    print('the df is ', df.head())
     X_train, X_dev, X_test = split_datasets(df, y_column, random_state)
     datasets = {'X_train': X_train, 'X_dev': X_dev, 'X_test': X_test}
 
@@ -71,11 +78,17 @@ def write_promoter_and_transcript_to_csv(df, y_column, promoter_dictionary, tran
 
     for dataset_name, dataset in datasets.items():
         # Normalise the expression values - Min max scalling - linearly scales values between 0 and 1 
-        dataset_scalled = scaler.fit_transform(dataset['Mean_expression'])
+        if isinstance(dataset, pd.Series):
+            dataset = dataset.to_frame()
+        print(dataset.columns)
+        print('the dataset is', dataset.head())
+        dataset[['Mean_expression']] = scaler.fit_transform(dataset[['Mean_expression']])
+       
 
         with open(output_file_names[dataset_name], 'w') as f:
             f.write('sequence,label\n')
-            for transcript in tqdm(dataset.to_list()):
+            list_transcripts = dataset['Gene']
+            for transcript in tqdm(list_transcripts.to_list()):
                 promoter_name = transcript + prom_name_ending
 
                 if promoter_name not in promoter_dictionary:
@@ -86,7 +99,8 @@ def write_promoter_and_transcript_to_csv(df, y_column, promoter_dictionary, tran
                 if promoter_name in promoter_dictionary and transcript in transcript_dictionary:
                     
                     sequence = promoter_dictionary[promoter_name] + transcript_dictionary[transcript]
-                    expression_value = dataset_scalled[dataset_scalled['Gene'] == transcript]['Mean_expression'].values[0]
+                    expression_value = dataset.loc[dataset['Gene'] == transcript, 'Mean_expression'].values[0]
+            
                     
                     f.write(f"{sequence},{expression_value}\n")
 
@@ -159,28 +173,28 @@ def plot_range_of_expression_values(file_paths, out_file_path):
 
 
 def main():
-    distance_upstream = 1500
-    distance_downstream = 0
-    random_state = 42 
+    distance_upstream = int(sys.argv[1])
+    distance_downstream = int(sys.argv[2])
+    random_state = int(sys.argv[3])
 
-    transcript_dictionary = parse_fasta_transcripts('../../../data/Gmax_508_Wm82.a4.v1.transcript.fa')
-    promoter_dictionary = parse_fasta(f'../promoters_{distance_upstream}up_{distance_downstream}down_soy.fa') # Note the transcripts in the .fa file are named like _prom_{distance_upstream} 
+    transcript_dictionary = parse_fasta_transcripts(str(sys.argv[4]))
+    promoter_dictionary = parse_fasta(str(sys.argv[5])) # Note the transcripts in the .fa file are named like _prom_{distance_upstream} 
 
-    metadata_path = '/home/u10093927/workspace/dagw/Soybean/data/PRJNA657728_metadata.tsv'
-    tpm_path = '/home/u10093927/workspace/dagw/Soybean/data/PRJNA657728_TPM.tsv'
-    tissue = 'leaf'
-    output_file_names = {'X_train': f'../../../tmp/soy_{distance_upstream}up_{distance_downstream}down_{random_state}/train.csv',
-                         'X_dev': f'../../../tmp/soy_{distance_upstream}up_{distance_downstream}down_{random_state}/dev.csv',
-                         'X_test': f'../../../tmp/soy_{distance_upstream}up_{distance_downstream}down_{random_state}/test.csv'}
+    metadata_path = str(sys.argv[6])
+    tpm_path = str(sys.argv[7])
+    tissue = str(sys.argv[8])
+    output_file_directory = str(sys.argv[9])
+    output_file_names = {'X_train': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}/train.csv',
+                         'X_dev': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}/dev.csv',
+                         'X_test': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}/test.csv'}
 
     s_numbers = get_s_numbers(metadata_path, tissue)
     matrix = tpm_matrix(tpm_path)
     average = average_expression_matrix(matrix, s_numbers) 
     expression_df = average # Columns are ['Gene', 'Mean_expression']
-
     write_promoter_and_transcript_to_csv(expression_df, 'Mean_expression', promoter_dictionary, transcript_dictionary, output_file_names, random_state, f'_prom_{distance_upstream}')
     determine_max_sequence_length(output_file_names.values())
-    plot_range_of_expression_values(output_file_names, '../normalised_expression_values.png')
+    plot_range_of_expression_values(output_file_names, str(sys.argv[10]))
 
 if __name__ == "__main__":
     main()

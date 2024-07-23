@@ -1,4 +1,13 @@
 #!/bin/bash
+#SBATCH -p ei-gpu
+#SBATCH -c 1					# number of cores
+#SBATCH --mem 125G				# memory pool for all cores
+#SBATCH --time=1-00:00				# time limit
+#SBATCH --output output_%x		# STDOUT and STDERR
+#SBATCH --mail-type=END,FAIL			# notifications for job done & fail
+#SBATCH --mail-user=lucy.mahony@earlham.ac.uk	# send-to address
+#SBATCH --gres=gpu:1
+
 
 # Parameters 
 max_length=46 # 18432 *.025
@@ -13,13 +22,15 @@ warmup_steps=50
 logging_steps=500 
 
 # File paths
-training_script=/home/u10093927/workspace/dagw/Soybean/src/Soy_expression_prediction/agro_nt_scripts/train_ia3_regression.py
-model=/home/u10093927/workspace/dagw/DNABERT2/src/agro-nucleotide-transformer-1b
-data=/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42
-outdir=/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42
+training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/agro_nt_scripts/train_ia3_regression.py
+model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
+data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/tmp/soy_1500up_0down_42
+outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/tmp/soy_1500up_0down_42
 
 echo "RUNNING SCRIPT"
-qig conda run -n transformers torchrun --nproc_per_node=${num_gpu} ${training_script} \
+source ~/.bashrc 
+mamba activate /hpc-home/mahony/miniforge3
+conda run -n transformers torchrun --nproc_per_node=${num_gpu} ${training_script} \
             --model_name_or_path ${model} \
             --data_path ${data} \
             --kmer -1 \

@@ -9,7 +9,8 @@
 
 
 import pandas as pd
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
+import sys 
 
 
 def get_s_numbers(metadata_file_path, tissue):
@@ -148,15 +149,20 @@ def generate_experiment_dict(bn, tissue, name, data_path):
 if __name__ == "__main__":
     huang_bn = 'PRJNA751745'
     wang_bn = 'PRJNA657728'
-    data_path = '/home/u10093927/workspace/dagw/Soybean/data/'
+    input_data_path = str(sys.argv[1]) 
+    output_data_path = str(sys.argv[2]) 
     tissue = 'leaf'
 
-    huang = generate_experiment_dict('PRJNA751745', 'leaf', 'Huang et al., 2022', '/home/u10093927/workspace/dagw/Soybean/data/')
-    wang = generate_experiment_dict('PRJNA657728', 'leaf', 'Wang et al., 2021', '/home/u10093927/workspace/dagw/Soybean/data/')
-    
-    plot_replicates(wang['tpm_matrix'], wang['s_numbers'][0], wang['s_numbers'][1], 'scatter_wang.png', log=True)
-    plot_replicates(huang['tpm_matrix'], huang['s_numbers'][0], huang['s_numbers'][1], 'scatter_huang.png', log=True)
-    plot_different_experiments(huang, wang, 'scatter_wang_against_huang.png', log=True)
+    huang = generate_experiment_dict('PRJNA751745', 'leaf', 'Huang et al., 2022', input_data_path)
+    wang = generate_experiment_dict('PRJNA657728', 'leaf', 'Wang et al., 2021', input_data_path)
+
+    # Save the average expression matricies 
+    huang_average = (huang['average_matrix']).to_csv(f'{output_data_path}/average_huang_TPM.tsv', index=False, sep = '\t')
+    wang_average = (wang['average_matrix']).to_csv(f'{output_data_path}/average_wang_TPM.tsv', index=False, sep = '\t')
+
+    plot_replicates(wang['tpm_matrix'], wang['s_numbers'][0], wang['s_numbers'][1], f'{output_data_path}scatter_wang.png', log=True)
+    plot_replicates(huang['tpm_matrix'], huang['s_numbers'][0], huang['s_numbers'][1], f'{output_data_path}scatter_huang.png', log=True)
+    plot_different_experiments(huang, wang, f'{output_data_path}scatter_wang_against_huang.png', log=True)
 
 
 

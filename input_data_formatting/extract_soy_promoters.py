@@ -4,6 +4,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 import logging
+import sys
 
 __doc__ = """
 Script to extract promoter regions from Soy genes.
@@ -37,7 +38,7 @@ def parse_gff3(gff3_file):
             if parts[2].lower() in names_of_transcripts:
                 # Stop at the second . ID=Glyma.U005100.
                 transcript_id = [x for x in parts[8].split(';') if x.startswith('ID=')][0].split('=')[1]
-                transcript_id = '.'.join(transcript_id.split('.', 2)[:2])# Stop at the second . ID=Glyma.U005100.
+                transcript_id = '.'.join(transcript_id.split('.', 2)[:2]) # Stop at the second . ID=Glyma.U005100.
                 transcripts[transcript_id] = {'chrom': parts[0], 'start': int(parts[3]), 'end': int(parts[4]),
                                                 'strand': parts[6]}
     return transcripts
@@ -105,13 +106,13 @@ def write_fasta_file(sequences_dictionary, out_file_name, distance_upstream):
 def main():
     # Set parameters and file paths python extract_promoters.py local 1500 50 promoters wheat
 
-    distance_upstream = 1500
-    distance_downstream = 0
+    distance_upstream = int(sys.argv[1])
+    distance_downstream = int(sys.argv[2])
 
-    gene_list_file_path = '/home/u10093927/workspace/dagw/Soybean/data/PRJNA657728_TPM.tsv' # Expression data from Soy atlas
-    gff3_file_path = '/data/prod/Formatted/gene_model/GLYMA_Williams82_JGI_pseudomolecule_Wm82a4v1_cpmt_1_1_JGI_GM_a4v1_1_1' # Annotation 
-    genome_file_path = '/data/prod/Formatted/fasta/GLYMA_Williams82_JGI_pseudomolecule_Wm82a4v1_cpmt_1_1' # Assembly
-    out_file_path = f'promoters_{distance_upstream}up_{distance_downstream}down_soy.fa'
+    gene_list_file_path = str(sys.argv[3]) # Expression data from Soy atlas
+    gff3_file_path = str(sys.argv[4]) # Annotation 
+    genome_file_path =  str(sys.argv[5]) # Assembly
+    out_file_path = str(sys.argv[6])
     
 
     soy_gene_list = gene_list(gene_list_file_path) 
@@ -132,3 +133,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Parsing the soy gff file
+    #   There is a total of 52837 sequences in the dictionary
+    #   The average length of the sequences is 1499.6288585650207 bp
