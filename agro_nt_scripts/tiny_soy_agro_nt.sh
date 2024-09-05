@@ -24,8 +24,8 @@ logging_steps=500
 # File paths
 training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/agro_nt_scripts/train_ia3_regression.py
 model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
-data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/tmp/soy_1500up_0down_42
-outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/tmp/soy_1500up_0down_42
+data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42
+outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42
 
 echo "RUNNING SCRIPT"
 source ~/.bashrc 
@@ -51,13 +51,14 @@ conda run -n transformers torchrun --nproc_per_node=${num_gpu} ${training_script
             --overwrite_output_dir True \
             --log_level info \
             --find_unused_parameters False \
-            -zslot 1 \
-            -zmem 64G \
-            -zgpu \
-            -zgpuslots 1 \
-            -zo tiny_soy_agro.log -ze tiny_soy_agro.err \
-            -zjobid -zmailaddrs lucy.mahony@partners.basf.com \
-            -zqueue gpu.h100 -zasync
+            --use_ia3 True
+            #-zslot 1 \
+            #-zmem 64G \
+            #-zgpu \
+            #-zgpuslots 1 \
+            #-zo tiny_soy_agro.log -ze tiny_soy_agro.err \
+            #-zjobid -zmailaddrs lucy.mahony@partners.basf.com \
+            #-zqueue gpu.h100 -zasync
 
 
 

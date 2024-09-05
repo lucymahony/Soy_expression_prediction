@@ -40,6 +40,24 @@ def parse_fasta_transcripts(fasta_file_path):
     return fasta_dict
 
 
+def filter_average_expression_dataset(df, threshold=1):
+    """
+    Filters the average expression matrix to only include transcripts where the expression is above the threshold
+    Input 
+    df: columns should be ['Gene', 'Mean_expression']
+    threshold: Minimum number of mean transcripts per million 
+    Output 
+    Filtered df
+    """
+    # Filter points based on threshold
+    mask = (df['Mean_expression'] >= threshold) 
+    df_filtered = df[mask]
+    print(f'Filtering the mean expression dataset with the threshold {threshold} TPM reduced the dataset size from {df.shape[0]} to {df_filtered.shape[0]}')
+    return df_filtered
+
+
+
+
 def split_datasets(df, y_column, random_state):
     """
     Split the circadian data into the train, dev, and test set. 90% of the data is used for training
@@ -192,13 +210,20 @@ def main():
     matrix = tpm_matrix(tpm_path)
     average = average_expression_matrix(matrix, s_numbers) 
     expression_df = average # Columns are ['Gene', 'Mean_expression']
-    write_promoter_and_transcript_to_csv(expression_df, 'Mean_expression', promoter_dictionary, transcript_dictionary, output_file_names, random_state, f'_prom_{distance_upstream}')
+    expression_df_filtered = filter_average_expression_dataset(expression_df)
+    write_promoter_and_transcript_to_csv(expression_df_filtered, 'Mean_expression', promoter_dictionary, transcript_dictionary, output_file_names, random_state, f'_prom_{distance_upstream}')
     determine_max_sequence_length(output_file_names.values())
     plot_range_of_expression_values(output_file_names, str(sys.argv[10]))
 
 if __name__ == "__main__":
     main()
-    # The maximum sequence length is: 18432
-    # The mean of the sequence lengths is: [3217.005748066453, 3187.2064760302774, 3225.051854655564]
-    # The standard deviation of the sequence lengths is: [1130.065491657768, 1111.4123625315297, 1179.9672188146387]
+    # Filtering the mean expression dataset with the threshold 1 TPM reduced the dataset size from 52837 to 29971
+    #The maximum sequence length is: 18432
+    #The mean of the sequence lengths is: [3424.478393408857, 3458.29280948851, 3462.1000667111407]
+    #The standard deviation of the sequence lengths is: [1178.332280832869, 1258.1119772813372, 1174.0035245271902]
+    #(24275, 2) (2698, 2) (2998, 2)
+    #Index(['sequence', 'label'], dtype='object')
+    #DataFrame 1: Mean = 0.0018537544703770134, Standard Deviation = 0.015790488241157863
+    #DataFrame 2: Mean = 0.004037938156329753, Standard Deviation = 0.026231881861027574
+    #DataFrame 3: Mean = 0.008792021178505872, Standard Deviation = 0.03951655364061851
 

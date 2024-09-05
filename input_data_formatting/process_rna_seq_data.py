@@ -10,7 +10,11 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns 
 import sys 
+from scipy.stats import pearsonr
+from scipy.stats import linregress
+import numpy as np
 
 
 def get_s_numbers(metadata_file_path, tissue):
@@ -95,32 +99,88 @@ def plot_different_experiments(experiment_1, experiment_2, out_file_path, log=Fa
     mean_1 = experiment_1['average_matrix']
     mean_2 = experiment_2['average_matrix']
 
+    x = mean_1['Mean_expression']
+    y = mean_2['Mean_expression']
+
     # Check that there are the same genes in matrix 1 as matrix 2 
     # Check same number of rows in each 
     if mean_1.shape[0] != mean_2.shape[0]:
         raise ValueError('The number of genes in the expression matrixes are not the same')
-    
     # Check the columns 'Gene' in both are the same. 
     if not mean_1['Gene'].equals(mean_2['Gene']):
         raise ValueError('The column Gene in the two expression matrixes are not the same ')
     
+    # Calculate Pearson correlation
+    pearson_corr, p_value = pearsonr(x, y)
+
+
     # Now the tests have passed can plot the average expression value across the replicates in expression matrix 1 to matrix 2. 
     fig, ax = plt.subplots(figsize=(10,10))
-
-
-
-    ax.scatter(mean_1['Mean_expression'], mean_2['Mean_expression'], color='blue')
+    sns.regplot(x = x, y = y, color='blue',  ci=None)
+    ax.grid(False)
     if log:
         ax.set_xscale("log")
         ax.set_yscale("log")
 
-    # Add labels and title
     ax.set_xlabel(experiment_1['name']+ ' expression values (TPM)')
     ax.set_ylabel(experiment_2['name']+ ' expression values (TPM)')
-    plt.title('Expression Values of ' + str(experiment_1['name']) + ', plotted against ' + str(experiment_2['name']) + '.')
-    plt.grid(True)
-    # Display the plot
+    plt.title('Expression Values of ' + str(experiment_1['name']) + ', plotted against ' + str(experiment_2['name']))
+    ax.text(x.min(), y.max(), 'Pearson r = {:.2f}'.format(pearson_corr), horizontalalignment='right', verticalalignment='top', fontsize=12, color='black')
     plt.savefig(out_file_path)
+
+
+
+def plot_different_experiments_with_thresholds(experiment_1, experiment_2, out_file_path, log=False, threshold=1):
+    """
+    Plot the averages of expression matrix 1 against expression matrix 2.
+    Input:
+        experiment_1 and 2 are dictionaries that contain average_matrix
+    """
+    mean_1 = experiment_1['average_matrix']
+    mean_2 = experiment_2['average_matrix']
+    x = mean_1['Mean_expression']
+    y = mean_2['Mean_expression']
+    
+    # Check that there are the same genes in matrix 1 as matrix 2
+    # Check same number of rows in each
+    if mean_1.shape[0] != mean_2.shape[0]:
+        raise ValueError('The number of genes in the expression matrices are not the same')
+    # Check the columns 'Gene' in both are the same.
+    if not mean_1['Gene'].equals(mean_2['Gene']):
+        raise ValueError('The column Gene in the two expression matrices are not the same')
+    
+    # Filter points based on threshold
+    mask = (x >= threshold) & (y >= threshold)
+    x_filtered = x[mask]
+    y_filtered = y[mask]
+
+    # Calculate Pearson correlation
+    pearson_corr, p_value = pearsonr(x_filtered, y_filtered)
+    # Calculate the number of points above and below the threshold
+    points_above_threshold = mask.sum()
+    points_below_threshold = len(mask) - points_above_threshold
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    sns.regplot(x=x_filtered, y=y_filtered, ci=None, ax=ax, scatter_kws={"color": "royalblue", 's': 10}, line_kws={"color": "navy", "lw": 1})
+    ax.scatter(x[~mask], y[~mask], color='grey', s=10, label='Below threshold') # unfiltered points in grey
+    ax.axhline(threshold, color='red', linestyle='dotted', lw=2)
+    ax.axvline(threshold, color='red', linestyle='dotted', lw=2)
+
+    ax.grid(False)
+    if log:
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+    ax.set_xlabel(experiment_1['name'] + ' expression values (TPM)')
+    ax.set_ylabel(experiment_2['name'] + ' expression values (TPM)')
+    plt.title('Expression Values of ' + str(experiment_1['name']) + ', plotted against ' + str(experiment_2['name']))
+    
+    ax.text(0.001, 10000, f'Pearson r = {pearson_corr:.2f}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
+    ax.text(0.001, 5623, f'Above threshold = {points_above_threshold}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
+    ax.text(0.001, 3200, f'Below threshold = {points_below_threshold}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
+
+    plt.savefig(out_file_path, dpi=900)
+
 
 
 def generate_experiment_dict(bn, tissue, name, data_path):
@@ -160,9 +220,10 @@ if __name__ == "__main__":
     huang_average = (huang['average_matrix']).to_csv(f'{output_data_path}/average_huang_TPM.tsv', index=False, sep = '\t')
     wang_average = (wang['average_matrix']).to_csv(f'{output_data_path}/average_wang_TPM.tsv', index=False, sep = '\t')
 
-    plot_replicates(wang['tpm_matrix'], wang['s_numbers'][0], wang['s_numbers'][1], f'{output_data_path}scatter_wang.png', log=True)
-    plot_replicates(huang['tpm_matrix'], huang['s_numbers'][0], huang['s_numbers'][1], f'{output_data_path}scatter_huang.png', log=True)
-    plot_different_experiments(huang, wang, f'{output_data_path}scatter_wang_against_huang.png', log=True)
+    #plot_replicates(wang['tpm_matrix'], wang['s_numbers'][0], wang['s_numbers'][1], f'{output_data_path}scatter_wang.png', log=True)
+    #plot_replicates(huang['tpm_matrix'], huang['s_numbers'][0], huang['s_numbers'][1], f'{output_data_path}scatter_huang.png', log=True)
+    
+    plot_different_experiments_with_thresholds(huang, wang, f'{output_data_path}scatter_wang_against_huang.png', log=True)
 
 
 

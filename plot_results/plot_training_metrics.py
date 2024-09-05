@@ -4,7 +4,7 @@ import os
 import json
 import pandas as pd 
 import matplotlib.pyplot as plt
-
+import sys
 def parse_json_file(file_path):
     # Check file exists
     if os.path.isfile(file_path):
@@ -13,8 +13,9 @@ def parse_json_file(file_path):
             for key in data:
                 if key == "log_history":
                     log_history = data[key]
+                    print(f'The log history is {log_history}')
                     return log_history
-    else: print('file doesnt exist')
+    else: print(f'file {file_path} doesnt exist')
 
 
 def collect_key_data(list_of_logging_dicts, list_metrics):
@@ -54,24 +55,27 @@ def create_df(dictionary_of_results):
 
 
 
-def plot_results(df, title, output_path):
+def plot_results_one_experiment(df, title, output_path):
     # Rename the columns 
 
     names = {'epoch' : 'Epochs',
             'loss' : 'Training Loss',
-            'eval_loss' : 'Validation Loss',
-            'eval_mse' : 'Validation MSE'}
+            'eval_mae' : 'Validation MAE',
+            'eval_mse' : 'Validation MSE', 
+            'eval_rmse': 'Validation RMSE'}
 
     df.rename(columns=names, inplace=True)
 
     fig, axs = plt.subplots(2, 2)
 
     axs[0, 0].plot(df['Epochs'], df['Training Loss'])
-    axs[0, 0].set_title('Training Loss')
-    axs[0, 1].plot(df['Epochs'], df['Validation Loss'], 'tab:orange')
-    axs[0, 1].set_title('Validation Loss')
+    axs[0, 0].set_title('Training Loss - MAE')
+    axs[0, 1].plot(df['Epochs'], df['Validation MAE'], 'tab:orange')
+    axs[0, 1].set_title('Validation Loss - MAE')
     axs[1, 0].plot(df['Epochs'], df['Validation MSE'], 'tab:green')
     axs[1, 0].set_title('Validation MSE')
+    axs[1, 1].plot(df['Epochs'], df['Validation RMSE'], 'tab:green')
+    axs[1, 1].set_title('Validation RMSE')
 
     for ax in axs.flat:
         ax.set(xlabel='Epochs', ylabel='')
@@ -81,19 +85,105 @@ def plot_results(df, title, output_path):
     axs[0, 1].set_xticks([])
     axs[0, 1].set(xlabel='')
     fig.suptitle(title)
+    plt.tight_layout() 
+    print(f'The plot is going to be saved as {output_path}')
     plt.savefig(output_path, dpi=900)
 
 
-def make_plot(json_file_path, output_path, list_metrics, title):
+
+def plot_results_multiple_experiments(dataframes, output_path, data_names, title, log_y_axis=False):
+    col_names = {
+        'epoch': 'Epochs',
+        'loss': 'Training Loss',
+        'eval_mae': 'Validation MAE',
+        'eval_mse': 'Validation MSE',
+        'eval_rmse': 'Validation RMSE'
+    }
+    for df in dataframes:
+        df.rename(columns=col_names, inplace=True)
+    colors = ['#330072', '#8A1538', '#AE2573', '#DA291C', '#ED8B00', '#FFB81C', '#FAE100']
+    dashes = [(5, 1), (1, 1), (3, 1, 1, 1), (3, 1, 1, 1, 1, 1), (3, 5, 1, 5, 1, 5), (3, 5, 1, 5), (1, 1)]
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    # Determine global y-limits
+    ylims = {}
+    for metric in ['Training Loss', 'Validation MAE', 'Validation MSE', 'Validation RMSE']:
+        ymin = min(df[metric].min() for df in dataframes)
+        ymax = max(df[metric].max() for df in dataframes)
+        ylims[metric] = (ymin, ymax)
+
+    for i, df in enumerate(dataframes):
+        name = data_names[i]
+        axs[0, 0].plot(df['Epochs'], df['Training Loss'], dashes=dashes[i], label=name, color=colors[i])
+        axs[0, 0].set_title('Training Loss')
+        axs[0, 0].set_ylim(ylims['Training Loss'])
+
+        axs[0, 1].plot(df['Epochs'], df['Validation MAE'], dashes=dashes[i], label=name, color=colors[i])
+        axs[0, 1].set_title('Validation MAE')
+        axs[0, 1].set_ylim(ylims['Validation MAE'])
+
+        axs[1, 0].plot(df['Epochs'], df['Validation MSE'], dashes=dashes[i], label=name, color=colors[i])
+        axs[1, 0].set_title('Validation MSE')
+        axs[1, 0].set_ylim(ylims['Validation MSE'])
+
+        axs[1, 1].plot(df['Epochs'], df['Validation RMSE'], dashes=dashes[i], label=name, color=colors[i])
+        axs[1, 1].set_title('Validation RMSE')
+        axs[1, 1].set_ylim(ylims['Validation RMSE'])
+
+        if log_y_axis:
+            for ax in axs.flat:
+                ax.set_yscale('log')
+
+    for ax in axs.flat:
+        ax.set(xlabel='Epochs', ylabel='')
+
+    axs[0, 0].set(xlabel='')
+    axs[0, 1].set(xlabel='')
+
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.1)
+    fig.legend(labels=data_names, loc='lower center', ncol=len(data_names), fontsize="11")
+    fig.suptitle(title)
+    plt.savefig(output_path, dpi=900)
+
+
+
+def make_plot_one_experiment(json_file_path, output_path, list_metrics, title):
     log_history = parse_json_file(json_file_path)
     results = collect_key_data(log_history, list_metrics)
     df = create_df(results)
-    plot_results(df, title, output_path)
+    plot_results_one_experiment(df, title, output_path)
 
 
+def make_plot_multiple_experiments(list_of_json_file_paths, output_path, list_metrics, title, log_y_scale=False):
+    dfs =[]
+    for json in list_of_json_file_paths:
+        log_history = parse_json_file(json)
+        results = collect_key_data(log_history, list_metrics)
+        df = create_df(results)
+        dfs.append(df)
+    plot_results_multiple_experiments(dfs, output_path, ['3e-4', '3e-5', '3e-6', '3e-7', '3e-8', '3e-9', '3e-10'], title, log_y_scale)
+    
+        
 if __name__ == "__main__":
-    json_file_path = '/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42/checkpoint-2500/trainer_state.json'
-    output_path = '/home/u10093927/workspace/dagw/Soybean/tmp/soy_1500up_0down_42/'
-    list_metrics = ['epoch', 'loss','eval_loss', 'eval_mse']
-    title = 'Tiny soy'
-    make_plot(json_file_path, output_path, list_metrics, title)
+    # Plotting one experiment example :
+    json_file_path = '../intermediate_data/soy_1500up_0down_42/3e-5/checkpoint-4500/trainer_state.json'
+    output_path = '../intermediate_data/soy_1500up_0down_42/3e-5/3e-5_soy_1500up_0down_42.png'
+    title = ''
+    list_metrics = ['epoch', 'loss', 'eval_mae', 'eval_mse', 'eval_rmse']
+    make_plot_one_experiment(json_file_path, output_path, list_metrics, title)
+
+    # Plotting multiple experiments:
+
+    json_file_paths = ['../intermediate_data/soy_1500up_0down_42/3e-4/checkpoint-4500/trainer_state.json',
+                       '../intermediate_data/soy_1500up_0down_42/3e-5/checkpoint-4500/trainer_state.json',
+                       '../intermediate_data/soy_1500up_0down_42/3e-6/checkpoint-4500/trainer_state.json',
+                       '../intermediate_data/soy_1500up_0down_42/3e-7/checkpoint-4500/trainer_state.json',
+                       '../intermediate_data/soy_1500up_0down_42/3e-8/checkpoint-4500/trainer_state.json',
+                       '../intermediate_data/soy_1500up_0down_42/3e-9/checkpoint-4500/trainer_state.json',
+                       '../intermediate_data/soy_1500up_0down_42/3e-10/checkpoint-4500/trainer_state.json']
+    
+    output_path = '../intermediate_data/soy_1500up_0down_42/lr_results.png'
+    list_metrics = ['epoch', 'loss', 'eval_mae', 'eval_mse', 'eval_rmse']
+    title = 'Tuning Learning Rate'
+    make_plot_multiple_experiments(json_file_paths, output_path, list_metrics, title, log_y_scale=True)
+    
