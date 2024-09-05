@@ -24,7 +24,7 @@ warmup_steps=50
 logging_steps=500 
 
 # File paths
-training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/agro_nt_scripts/plot_pretrained_model_predictions.py
+training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/plot_results/make_pretrained_model_predictions.py
 model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
 data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42
 
@@ -34,7 +34,7 @@ mamba activate /hpc-home/mahony/miniforge3
 
 lr=3e-5
 
-outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42/3e-5/checkpoint-4500
+outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42/checkpoint-9000/
 # Check if the model already exists in the output directory
 if [ -d "${outdir}" ] && [ "$(ls -A ${outdir})" ]; then
     echo "Pre-trained model found in ${outdir}. Loading the model..."
