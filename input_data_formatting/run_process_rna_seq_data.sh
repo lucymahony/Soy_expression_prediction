@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -c 1					# number of cores
-#SBATCH --mem 56G				# memory pool for all cores
-#SBATCH --time=1-00:00				# time limit
+#SBATCH --mem 1G				# memory pool for all cores
+#SBATCH -p ei-short
 #SBATCH --output output_%x		# STDOUT and STDERR
 #SBATCH --mail-type=END,FAIL			# notifications for job done & fail
 #SBATCH --mail-user=lucy.mahony@earlham.ac.uk	# send-to address

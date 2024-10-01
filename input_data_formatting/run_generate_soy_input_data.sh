@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -c 1					# number of cores
-#SBATCH --mem 56G				# memory pool for all cores
-#SBATCH --time=1-00:00				# time limit
-#SBATCH --output output_%x		# STDOUT and STDERR
+#SBATCH --mem 100G				# memory pool for all cores
+#SBATCH -p ei-medium		# time limit
+#SBATCH --output %x.out		# STDOUT 
+#SBATCH --error %x.err
 #SBATCH --mail-type=END,FAIL			# notifications for job done & fail
 #SBATCH --mail-user=lucy.mahony@earlham.ac.uk	# send-to address
-
 
 # Parameters 
 distance_upstream=1500
@@ -14,8 +14,6 @@ random_state=42
 
 # File paths
 # wang_bn = 'PRJNA657728' 
-
-
 
 transcript_dictionary_path='/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/input_data/Gmax_508_Wm82.a4.v1.transcript.fa'
 promoter_dictionary_path="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/promoters_1500up_0down_soy.fa"

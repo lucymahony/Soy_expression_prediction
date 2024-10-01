@@ -11,6 +11,7 @@ import sys
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from process_rna_seq_data import tpm_matrix, average_expression_matrix, get_s_numbers
+import numpy as np
 
 
 def parse_fasta(fasta_file_path):
@@ -55,27 +56,38 @@ def filter_average_expression_dataset(df, threshold=1):
     print(f'Filtering the mean expression dataset with the threshold {threshold} TPM reduced the dataset size from {df.shape[0]} to {df_filtered.shape[0]}')
     return df_filtered
 
+def log2_transform(df):
+    """
+    Log2 transform the expression values
+    :return: The log2 transformed dataframe
+    """
+    df.loc[:, 'Mean_expression_log2'] = df['Mean_expression'].apply(lambda x: np.log2(x))
+    return df
 
 
+def check_log2_transformed_thresholded_df(df):
+    """
+    The average expression is above 0.5 TPM and the log2 transformation is applied so the values must be above -1
+    log2(0.5) = -1
+    """
+    print(df['Mean_expression_log2'].min())
+    print(df['Mean_expression_log2'].max())
+    print(df.columns)
+    print(df.head())
+    print(df.describe())
+    if df['Mean_expression_log2'].min() < -1:
+        raise ValueError('The log2 transformation has not worked correctly as the minimum value is below -1')
+    else:
+        print('The log2 transformation has worked correctly')
 
-def split_datasets(df, y_column, random_state):
+
+def split_datasets(df, random_state):
     """
     Split the circadian data into the train, dev, and test set. 90% of the data is used for training
     :return: List of transcripts for the train, dev, and test set
     """
-    X = df['Gene'] # Gene name 
-    y = df[y_column] # Expression value 
-    # Split into train and temporary test
-    X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.1, random_state=random_state)
-    # Split the temporary test set into dev and test
-    X_train, X_dev, y_train, y_dev = train_test_split(X_temp, y_temp, test_size=0.1, random_state=random_state)
-
-
-    # Trying 
     temp, test = train_test_split(df, test_size=0.1, random_state=random_state)
-    train, dev = train_test_split(temp, test_size=0.1, random_state=random_state )
-
-    #return X_train, X_dev, X_test
+    train, dev = train_test_split(temp, test_size=0.1, random_state=random_state)
     return train, dev, test
 
 
@@ -86,23 +98,14 @@ def write_promoter_and_transcript_to_csv(df, y_column, promoter_dictionary, tran
     The label is the expression scalled between 0 and 1, The scalling is performed independently in test dev and train to prevent data leakage 
     :return: None
     """
-    print('the df is ', df.head())
-    X_train, X_dev, X_test = split_datasets(df, y_column, random_state)
+    X_train, X_dev, X_test = split_datasets(df, random_state)
     datasets = {'X_train': X_train, 'X_dev': X_dev, 'X_test': X_test}
-
-    scaler = MinMaxScaler()
     missing_prom_count = 0
     missing_transcript_count = 0
 
     for dataset_name, dataset in datasets.items():
-        # Normalise the expression values - Min max scalling - linearly scales values between 0 and 1 
-        if isinstance(dataset, pd.Series):
-            dataset = dataset.to_frame()
         print(dataset.columns)
-        print('the dataset is', dataset.head())
-        dataset[['Mean_expression']] = scaler.fit_transform(dataset[['Mean_expression']])
-       
-
+        print(f'For dataset {dataset_name} the head is:', dataset.head())
         with open(output_file_names[dataset_name], 'w') as f:
             f.write('sequence,label\n')
             list_transcripts = dataset['Gene']
@@ -117,11 +120,9 @@ def write_promoter_and_transcript_to_csv(df, y_column, promoter_dictionary, tran
                 if promoter_name in promoter_dictionary and transcript in transcript_dictionary:
                     
                     sequence = promoter_dictionary[promoter_name] + transcript_dictionary[transcript]
-                    expression_value = dataset.loc[dataset['Gene'] == transcript, 'Mean_expression'].values[0]
-            
-                    
+                    expression_value = dataset.loc[dataset['Gene'] == transcript, y_column].values[0]
                     f.write(f"{sequence},{expression_value}\n")
-
+        print(f'Finished writing {dataset_name} to csv')
     print(f"Number of missing promoters: {missing_prom_count}")
     print(f"Number of missing transcripts: {missing_transcript_count}")
 
@@ -150,6 +151,7 @@ def determine_max_sequence_length(file_paths):
     return max_length
 
 
+
 def plot_range_of_expression_values(file_paths, out_file_path):
     """
     Input: Dictionary containinng the file_paths to the csvs of train dev test
@@ -160,12 +162,6 @@ def plot_range_of_expression_values(file_paths, out_file_path):
     df3 = pd.read_csv(file_paths['X_test'])
     print(df1.shape, df2.shape, df3.shape)
     print(df1.columns)
-    scaler = MinMaxScaler()
-    df1['label'] = scaler.fit_transform(df1[['label']])
-    df2['label'] = scaler.fit_transform(df2[['label']])
-    df3['label'] = scaler.fit_transform(df3[['label']])
-    
-    # Calculate mean and standard deviation for each dataframe
     means = [df['label'].mean() for df in [df1, df2, df3]]
     stds = [df['label'].std() for df in [df1, df2, df3]]
     
@@ -174,21 +170,57 @@ def plot_range_of_expression_values(file_paths, out_file_path):
         print(f"DataFrame {i}: Mean = {mean}, Standard Deviation = {std}")
     
     # Combine the dataframes for plotting
-    combined_df = pd.concat([df1[['label']].assign(Dataset='DF1'),
-                             df2[['label']].assign(Dataset='DF2'),
-                             df3[['label']].assign(Dataset='DF3')],
+    combined_df = pd.concat([df1[['label']].assign(Dataset='Train'),
+                             df2[['label']].assign(Dataset='Validation'),
+                             df3[['label']].assign(Dataset='Test')],
                             axis=0)
     # Plotting
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(x='Dataset', y='label', data=combined_df)
-    plt.title('Box Plots of Normalised Expression Values')
-    plt.xlabel('Dataset')
-    plt.ylabel('Normalised expression values')
-    plt.savefig(out_file_path)
-    # DataFrame 1: Mean = 0.0010776535888375517, Standard Deviation = 0.011842737419376062
-    # DataFrame 2: Mean = 0.003132195316718362, Standard Deviation = 0.021896309438584897
-    # DataFrame 3: Mean = 0.00279879167004402, Standard Deviation = 0.022733163418869586
+    plt.figure(figsize=(5.7, 5.7), dpi=900)
+    colours = {'Train': '#da1e28', 'Validation': '#8a3ffc', 'Test': '#0072c3'}
+    sns.boxplot(x='Dataset', y='label', data=combined_df, palette=colours)
+    min_y = plt.ylim()[0] 
+    for i in range(len(means)):
+        plt.text(i, min_y +0.2, f"{means[i]:.2f} ± {stds[i]:.2f}", ha='center', fontsize=8)
+    plt.title('Log2 Expression Values', fontsize=11)
+    plt.ylabel('Expression values (Log2)', fontsize=11)
+    plt.xlabel('', fontsize=11)
+    plt.savefig(out_file_path, dpi=900)
 
+
+def plot_after_min_max_normalisation(file_paths, out_file_path):
+    """
+    """
+    scaler = MinMaxScaler()
+    df1 = pd.read_csv(file_paths['X_train'])
+    df2 = pd.read_csv(file_paths['X_dev'])
+    df3 = pd.read_csv(file_paths['X_test'])
+    # Scale the labels of the dfs
+    df1['label'] = scaler.fit_transform(df1[['label']])
+    df2['label'] = scaler.transform(df2[['label']])
+    df3['label'] = scaler.transform(df3[['label']])
+    means = [df['label'].mean() for df in [df1, df2, df3]]
+    stds = [df['label'].std() for df in [df1, df2, df3]]
+    
+    # Print mean and standard deviation
+    for i, (mean, std) in enumerate(zip(means, stds), 1):
+        print(f"DataFrame {i}: Mean = {mean}, Standard Deviation = {std}")
+    
+    # Combine the dataframes for plotting
+    combined_df = pd.concat([df1[['label']].assign(Dataset='Train'),
+                             df2[['label']].assign(Dataset='Validation'),
+                             df3[['label']].assign(Dataset='Test')],
+                            axis=0)
+    # Plotting
+    plt.figure(figsize=(5.7, 5.7), dpi=900)
+    colours = {'Train': '#da1e28', 'Validation': '#8a3ffc', 'Test': '#0072c3'}
+    sns.boxplot(x='Dataset', y='label', data=combined_df, palette=colours)
+    min_y = plt.ylim()[0] 
+    for i in range(len(means)):
+        plt.text(i, min_y +0.02, f"{means[i]:.2f} ± {stds[i]:.2f}", ha='center', fontsize=8)
+    plt.title('Log2 Expression Values after Min Max Scaler', fontsize=11)
+    plt.ylabel('Scaled expression values (Log2)', fontsize=11)
+    plt.xlabel('', fontsize=11)
+    plt.savefig(out_file_path, dpi=900)
 
 def main():
     distance_upstream = int(sys.argv[1])
@@ -202,18 +234,21 @@ def main():
     tpm_path = str(sys.argv[7])
     tissue = str(sys.argv[8])
     output_file_directory = str(sys.argv[9])
-    output_file_names = {'X_train': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}/train.csv',
-                         'X_dev': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}/dev.csv',
-                         'X_test': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}/test.csv'}
+    output_file_names = {'X_train': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}_log2/train.csv',
+                         'X_dev': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}_log2/dev.csv',
+                         'X_test': f'{output_file_directory}soy_{distance_upstream}up_{distance_downstream}down_{random_state}_log2/test.csv'}
 
     s_numbers = get_s_numbers(metadata_path, tissue)
     matrix = tpm_matrix(tpm_path)
     average = average_expression_matrix(matrix, s_numbers) 
     expression_df = average # Columns are ['Gene', 'Mean_expression']
-    expression_df_filtered = filter_average_expression_dataset(expression_df)
-    write_promoter_and_transcript_to_csv(expression_df_filtered, 'Mean_expression', promoter_dictionary, transcript_dictionary, output_file_names, random_state, f'_prom_{distance_upstream}')
+    expression_df_filtered = filter_average_expression_dataset(expression_df, threshold=0.5)
+    expression_df_filtered = log2_transform(expression_df_filtered)
+    check_log2_transformed_thresholded_df(expression_df_filtered)
+    write_promoter_and_transcript_to_csv(expression_df_filtered, 'Mean_expression_log2', promoter_dictionary, transcript_dictionary, output_file_names, random_state, f'_prom_{distance_upstream}')
     determine_max_sequence_length(output_file_names.values())
-    plot_range_of_expression_values(output_file_names, str(sys.argv[10]))
+    plot_range_of_expression_values(output_file_names, f'{str(sys.argv[10])}normalised_expression_values_wang.png')
+    plot_after_min_max_normalisation(output_file_names, f'{str(sys.argv[10])}normalised_expression_values_wang_min_max_scaler.png')    
 
 if __name__ == "__main__":
     main()
