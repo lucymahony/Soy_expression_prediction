@@ -154,36 +154,38 @@ def make_plot_one_experiment(json_file_path, output_path, list_metrics, title):
     plot_results_one_experiment(df, title, output_path)
 
 
-def make_plot_multiple_experiments(list_of_json_file_paths, output_path, list_metrics, title, log_y_scale=False):
+def make_plot_multiple_experiments(list_of_json_file_paths, output_path, list_metrics, lrs, title, log_y_scale=False):
+    """
+    lrs = list of learning rate e.g. ['3e-4', '3e-5', '3e-6', '3e-7']
+    """
     dfs =[]
     for json in list_of_json_file_paths:
         log_history = parse_json_file(json)
         results = collect_key_data(log_history, list_metrics)
         df = create_df(results)
         dfs.append(df)
-    plot_results_multiple_experiments(dfs, output_path, ['3e-4', '3e-5', '3e-6', '3e-7', '3e-8', '3e-9', '3e-10'], title, log_y_scale)
+    plot_results_multiple_experiments(dfs, output_path, lrs, title, log_y_scale)
     
         
 if __name__ == "__main__":
     # Plotting one experiment example :
-    json_file_path = '../intermediate_data/soy_1500up_0down_42/3e-5/checkpoint-4500/trainer_state.json'
-    output_path = '../intermediate_data/soy_1500up_0down_42/3e-5/3e-5_soy_1500up_0down_42.png'
-    title = ''
-    list_metrics = ['epoch', 'loss', 'eval_mae', 'eval_mse', 'eval_rmse']
-    make_plot_one_experiment(json_file_path, output_path, list_metrics, title)
+    #json_file_path = '../intermediate_data/soy_1500up_0down_42/3e-5/checkpoint-4500/trainer_state.json'
+    #output_path = '../intermediate_data/soy_1500up_0down_42/3e-5/3e-5_soy_1500up_0down_42.png'
+    #title = ''
+    #list_metrics = ['epoch', 'loss', 'eval_mae', 'eval_mse', 'eval_rmse']
+    #make_plot_one_experiment(json_file_path, output_path, list_metrics, title)
 
     # Plotting multiple experiments:
+    location_intermediate_data = str(sys.argv[1])
+    checkpoint_file_name= str(sys.argv[2])
+    plot_output_path = str(sys.argv[3])
+    lrs = str(sys.argv[4]) # This passes it in as a str 
+    lrs = map(str, lrs.split(',')) # This splits the string into a list of strings 
+    print(lrs, type(lrs))
+    json_file_paths = [f'{location_intermediate_data}/{lr}/{checkpoint_file_name}/trainer_state.json' for lr in lrs]
 
-    json_file_paths = ['../intermediate_data/soy_1500up_0down_42/3e-4/checkpoint-4500/trainer_state.json',
-                       '../intermediate_data/soy_1500up_0down_42/3e-5/checkpoint-4500/trainer_state.json',
-                       '../intermediate_data/soy_1500up_0down_42/3e-6/checkpoint-4500/trainer_state.json',
-                       '../intermediate_data/soy_1500up_0down_42/3e-7/checkpoint-4500/trainer_state.json',
-                       '../intermediate_data/soy_1500up_0down_42/3e-8/checkpoint-4500/trainer_state.json',
-                       '../intermediate_data/soy_1500up_0down_42/3e-9/checkpoint-4500/trainer_state.json',
-                       '../intermediate_data/soy_1500up_0down_42/3e-10/checkpoint-4500/trainer_state.json']
-    
-    output_path = '../intermediate_data/soy_1500up_0down_42/lr_results.png'
     list_metrics = ['epoch', 'loss', 'eval_mae', 'eval_mse', 'eval_rmse']
     title = 'Tuning Learning Rate'
-    make_plot_multiple_experiments(json_file_paths, output_path, list_metrics, title, log_y_scale=True)
+    
+    make_plot_multiple_experiments(json_file_paths, plot_output_path, list_metrics, lrs, title, log_y_scale=True)
     

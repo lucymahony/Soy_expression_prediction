@@ -26,21 +26,21 @@ logging_steps=500
 # File paths
 training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/plot_results/make_pretrained_model_predictions.py
 model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
-data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42
+data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42_log2/
 
 echo "RUNNING SCRIPT"
 source ~/.bashrc 
 mamba activate /hpc-home/mahony/miniforge3
 
-lr=3e-5
+lr=3e-4
 
-outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42/checkpoint-9000/
+outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42_log2/3e-4/checkpoint-1500
 # Check if the model already exists in the output directory
 if [ -d "${outdir}" ] && [ "$(ls -A ${outdir})" ]; then
     echo "Pre-trained model found in ${outdir}. Loading the model..."
 
     conda run -n transformers torchrun --nproc_per_node=${num_gpu} ${training_script} \
-                --model_name_or_path ${model} \
+                --model_name_or_path ${outdir} \
                 --data_path ${data} \
                 --kmer -1 \
                 --run_name lr_experiment \
