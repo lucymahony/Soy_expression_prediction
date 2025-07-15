@@ -1,0 +1,18 @@
+RUNNING SCRIPT
+The results columns are Index(['Input', 'TrueLabel', 'Prediction'], dtype='object')
+Traceback (most recent call last):
+  File "/ei/.project-scratch/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/repos/Soy_expression_prediction/plot_results/plot_pretrained_model_predictions.py", line 51, in <module>
+    input_data = read_in_results(input_data)
+  File "/ei/.project-scratch/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/repos/Soy_expression_prediction/plot_results/plot_pretrained_model_predictions.py", line 8, in read_in_results
+    results = pd.read_csv(file_path, sep=',')
+  File "/hpc-home/mahony/miniforge3/lib/python3.10/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+  File "/hpc-home/mahony/miniforge3/lib/python3.10/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+  File "/hpc-home/mahony/miniforge3/lib/python3.10/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+  File "/hpc-home/mahony/miniforge3/lib/python3.10/site-packages/pandas/io/parsers/readers.py", line 1880, in _make_engine
+    self.handles = get_handle(
+  File "/hpc-home/mahony/miniforge3/lib/python3.10/site-packages/pandas/io/common.py", line 873, in get_handle
+    handle = open(
+IsADirectoryError: [Errno 21] Is a directory: '/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/no_filtering/soy_1500up_0down_42_log2plus1'

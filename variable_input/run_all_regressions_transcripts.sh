@@ -10,15 +10,9 @@
 #SBATCH --array=0-0  # 27 datasets
 
 # Load environment
+
 source ~/.bashrc
-mamba activate /hpc-home/mahony/miniforge3
-conda activate transformers
-export PATH="/hpc-home/mahony/miniforge3/envs/transformers/bin:$PATH"
-conda run -n transformers which accelerate >> log.txt
-conda run -n transformers accelerate --version >> log.txt
-conda run -n transformers python -c "import accelerate; print(accelerate.__version__)" >> log.txt
-
-
+mamba activate transformers_py310_3
 
 MODEL_NAME="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b"
 PYTHON_SCRIPT="regression_agroNT.py"
@@ -58,9 +52,7 @@ log_file="$output_dir/train.log"
 
 # Run model with accelerate
 echo -e "\nRunning: $dataset_dir [$dataset_type]"
-conda run -n transformers accelerate launch \
-  --config_file ~/.cache/huggingface/accelerate/default_config.yaml \
-  regression_agroNT.py \
+python "$PYTHON_SCRIPT" \
   --train_fasta_file "$train_file" \
   --validate_fasta_file "$dev_file" \
   --test_fasta_file "$test_file" \

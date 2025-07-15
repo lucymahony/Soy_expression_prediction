@@ -13,28 +13,31 @@
 
 
 # Parameters 
-max_length=461 # 18432 *.025
-num_gpu=2
+max_length=1008 # 18432 *.025
+num_gpu=1
 per_device_batch_size=1
-gradient_acc_steps=32 # 16 * 2 = global batch size of 32
-train_epochs=12
-save_steps=500
-eval_steps=500 
-warmup_steps=50 
-logging_steps=500 
+gradient_acc_steps=5 # 16 * 2 = global batch size of 32
+train_epochs=4
+save_steps=50
+eval_steps=50 
+warmup_steps=5 
+logging_steps=50 
 
 # File paths
 training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/plot_results/make_pretrained_model_predictions.py
-model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
-data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42_log2/
-
+#model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
+data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/no_filtering/soy_1500up_0down_42_log2plus1
 echo "RUNNING SCRIPT"
 source ~/.bashrc 
 mamba activate /hpc-home/mahony/miniforge3
 
 lr=3e-4
+lora_r=32
+lora_a=32
+lora_d=0.3
 
-outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42_log2/3e-4/checkpoint-1500
+outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/no_filtering/soy_1500up_0down_42_log2plus1/lr_3e-4_r_32_alpha_32_dropout_0.3/checkpoint-6550 
+
 # Check if the model already exists in the output directory
 if [ -d "${outdir}" ] && [ "$(ls -A ${outdir})" ]; then
     echo "Pre-trained model found in ${outdir}. Loading the model..."
@@ -63,6 +66,9 @@ if [ -d "${outdir}" ] && [ "$(ls -A ${outdir})" ]; then
                 --use_lora True \
                 --save_model True \
                 --eval_and_save_results True
+                --lora_r ${lora_r} \
+                --lora_alpha ${lora_a} \
+                --lora_dropout ${lora_d}
 else
     echo "No pre-trained model found. : ( "
 fi

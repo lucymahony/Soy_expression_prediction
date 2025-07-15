@@ -7,12 +7,13 @@ import sys
 def read_in_results(file_path):
     results = pd.read_csv(file_path, sep=',')
     results.columns = results.columns.str.strip()
+    print(f'The results columns are {results.columns}') 
     return results
 
 
 def check_range_of_values(input_data, results):
-    predicted = results['Predicted']
-    actual = results['Actual']
+    predicted = results['Prediction']
+    actual = results['TrueLabel']
     print('The cut off is at 0.5 TPM which when log2 transformed is -1')
     print(f'Minimum predicted value: {predicted.min()}, maximum predicted value: {predicted.max()}')
     print(f'Minimum actual value: {actual.min()}, maximum actual value: {actual.max()}')
@@ -25,11 +26,11 @@ def plot(results, out_file_path):
     Plot predicted vs actual expression values 
     Note. The values are already log2 transformed so dont log the axis
     """
-    predicted = results['Actual']
-    actual = results['Predicted']
+    predicted = results['TrueLabel']
+    actual = results['Prediction']
     # Calculate Pearson correlation
     pearson_corr, p_value = pearsonr(predicted, actual)
-    print(f'Pearson correlation: {pearson_corr:.2f}, p-value: {p_value:.2f}')
+    print(f'Pearson correlation: {pearson_corr}, p-value: {p_value}')
     # Calculate the number of points above and below the threshold
 
     fig, ax = plt.subplots(figsize=(5.7, 5.7), dpi=900)
@@ -39,6 +40,7 @@ def plot(results, out_file_path):
     ax.set_ylabel('Actual expression values (Log2 TPM)', fontsize=11)
     plt.title('Expression Values of Predicted vs Actual', fontsize=11)
     plt.savefig(out_file_path, dpi=900)
+    print(f'The plot has been saved to {out_file_path}')
 
 
 if __name__ == '__main__':

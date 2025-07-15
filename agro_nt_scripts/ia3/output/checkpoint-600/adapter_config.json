@@ -1,0 +1,23 @@
+{
+  "auto_mapping": null,
+  "base_model_name_or_path": "/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b",
+  "fan_in_fan_out": false,
+  "feedforward_modules": [
+    "esm.encoder.layer.38.output.dense",
+    "esm.encoder.layer.39.output.dense"
+  ],
+  "inference_mode": true,
+  "init_ia3_weights": true,
+  "modules_to_save": null,
+  "peft_type": "IA3",
+  "revision": null,
+  "target_modules": [
+    "esm.encoder.layer.38.output.dense",
+    "esm.encoder.layer.38.attention.self.value",
+    "esm.encoder.layer.39.attention.self.value",
+    "esm.encoder.layer.39.output.dense",
+    "esm.encoder.layer.38.attention.self.key",
+    "esm.encoder.layer.39.attention.self.key"
+  ],
+  "task_type": "SEQ_CLS"
+}

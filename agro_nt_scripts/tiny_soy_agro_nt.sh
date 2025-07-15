@@ -10,10 +10,10 @@
 
 
 # Parameters 
-max_length=46 # 18432 *.025
+max_length=4608 # 18432 *.025
 num_gpu=1
-per_device_batch_size=2
-gradient_acc_steps=16 # 16 * 2=global batch size of 32
+per_device_batch_size=1
+gradient_acc_steps=32 # 16 * 2=global batch size of 32
 lr=3e-4
 train_epochs=2
 save_steps=500
@@ -24,8 +24,8 @@ logging_steps=500
 # File paths
 training_script=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/agro_nt_scripts/train_ia3_regression.py
 model=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b
-data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42
-outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42
+data=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42_log2
+outdir=/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/soy_1500up_0down_42_log2/3e-4
 
 echo "RUNNING SCRIPT"
 source ~/.bashrc 
@@ -50,8 +50,7 @@ conda run -n transformers torchrun --nproc_per_node=${num_gpu} ${training_script
             --logging_steps $logging_steps \
             --overwrite_output_dir True \
             --log_level info \
-            --find_unused_parameters False \
-            --use_ia3 True
+            --find_unused_parameters False 
             #-zslot 1 \
             #-zmem 64G \
             #-zgpu \

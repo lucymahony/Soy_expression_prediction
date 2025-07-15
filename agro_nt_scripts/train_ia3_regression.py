@@ -12,7 +12,7 @@ from transformers import EarlyStoppingCallback, set_seed # I added this
 import sklearn
 import numpy as np
 from torch.utils.data import Dataset
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score 
 
 
 from peft import (
@@ -51,7 +51,7 @@ class TrainingArguments(transformers.TrainingArguments):
     log_csv_path: str = field(default="log.csv") # I added this
     save_steps: int = field(default=100)
     eval_steps: int = field(default=100)
-    evaluation_strategy: str = field(default="steps"),
+    evaluation_strategy: str = field(default="steps")
     warmup_steps: int = field(default=50)
     weight_decay: float = field(default=0.01)
     learning_rate: float = field(default=1e-4)
@@ -222,8 +222,6 @@ def model_init():
 def train():
     parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-
-    # load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
@@ -232,11 +230,8 @@ def train():
         use_fast=True,
         trust_remote_code=True,
     )
-
     if "InstaDeepAI" in model_args.model_name_or_path:
         tokenizer.eos_token = tokenizer.pad_token
-
-    # define datasets and data collator
     train_dataset = SupervisedDataset(tokenizer=tokenizer, 
                                       data_path=os.path.join(data_args.data_path, "train.csv"), 
                                       kmer=data_args.kmer)
@@ -247,17 +242,13 @@ def train():
                                      data_path=os.path.join(data_args.data_path, "test.csv"), 
                                      kmer=data_args.kmer)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
-
-
-    # load model
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
         num_labels=1, # changed from num_labels=train_dataset.num_labels, to 1 https://github.com/MAGICS-LAB/DNABERT_2/issues/79
         trust_remote_code=True,
     )
-
-    # configure LoRA
+    model.config.problem_type = "regression"
     if model_args.use_lora:
         lora_config = LoraConfig(
             r=model_args.lora_r,
@@ -280,13 +271,11 @@ def train():
                                    train_dataset=train_dataset,
                                    eval_dataset=val_dataset,
                                    data_collator=data_collator) # I can add callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
+    print(f"Using loss function: {trainer.model.config.problem_type}")
     trainer.train()
-
     if training_args.save_model:
         trainer.save_state()
         safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
-
-    # get the evaluation results from trainer
     if training_args.eval_and_save_results:
         results_path = os.path.join(training_args.output_dir, "results", training_args.run_name)
         results = trainer.evaluate(eval_dataset=test_dataset)
@@ -300,6 +289,86 @@ def train():
 
     print(f'Now current is {torch.cuda.current_device}')
 
+def predict(model_args=None, data_args=None, training_args=None):
+    if model_args is None or data_args is None or training_args is None:
+        parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        model_max_length=training_args.model_max_length,
+        padding_side="right",
+        use_fast=True,
+        trust_remote_code=True,)
+
+    test_dataset = SupervisedDataset(
+        tokenizer=tokenizer,
+        data_path=os.path.join(data_args.data_path, "test.csv"),
+        kmer=data_args.kmer
+    )
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        num_labels=1,
+        trust_remote_code=True)
+    model.config.problem_type = "regression"
+
+    trainer = transformers.Trainer(
+        model=model,
+        tokenizer=tokenizer,
+        args=training_args
+    )
+
+    print("Running prediction on test set...")
+    predictions = trainer.predict(test_dataset)
+    preds = predictions.predictions.flatten()
+    labels = np.array(test_dataset.labels)
+
+    input_texts = []
+    with open(os.path.join(data_args.data_path, "test.csv"), "r") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            input_texts.append(row[0])
+
+    pred_output_path = os.path.join(training_args.output_dir, "results", training_args.run_name)
+    os.makedirs(pred_output_path, exist_ok=True)
+    output_csv = os.path.join(pred_output_path, "test_predictions.csv")
+
+    with open(output_csv, "w", newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Input", "TrueLabel", "Prediction"])
+        for text, label, pred in zip(input_texts, labels, preds):
+            writer.writerow([text, label, pred])
+
+    mse = mean_squared_error(labels, preds)
+    mae = mean_absolute_error(labels, preds)
+    r2 = r2_score(labels, preds)
+    print(f"\n✅ Prediction complete.\nMSE: {mse:.4f}, MAE: {mae:.4f}, R2: {r2:.4f}")
+    print(f"Predictions saved to: {output_csv}")
+
+
 if __name__ == "__main__":
     #set_cuda_device()
     train()
+    #predict(
+    #    model_args=ModelArguments(
+    #        model_name_or_path="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/filtering_out_low/soy_1500up_0down_42_log2plus1/lr_3e-4_r_32_alpha_32_dropout_0.3/checkpoint-5350",
+    #        use_lora=True  # if you trained with LoRA
+    #    ),
+    #    data_args=DataArguments(
+    #        data_path="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/filtering_out_low/soy_1500up_0down_42_log2plus1",  # should contain test.csv
+    #        kmer=6  # or whatever k you used in training
+    #    ),
+    #    training_args=TrainingArguments(
+    #        output_dir="../intermediate_data/predictions_output",
+    #        run_name="checkpoint-5350-eval",
+    #        per_device_eval_batch_size=1,
+    #        dataloader_pin_memory=False,
+    #        report_to=[],
+    #        disable_tqdm=False,
+    #        logging_dir="logs"
+    #    ))
+
+

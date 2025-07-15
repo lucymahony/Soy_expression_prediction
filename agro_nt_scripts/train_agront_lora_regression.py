@@ -1,0 +1,418 @@
+import os
+import csv
+import copy
+import json
+import logging
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Sequence, Tuple, List
+import pandas as pd
+import torch
+import transformers
+from transformers import EarlyStoppingCallback, set_seed # I added this 
+import sklearn
+import numpy as np
+from torch.utils.data import Dataset
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score 
+
+
+from peft import (
+    LoraConfig,
+    get_peft_model
+)
+
+@dataclass
+class ModelArguments:
+    model_name_or_path: Optional[str] = field(default="facebook/opt-125m")
+    use_lora: bool = field(default=False, metadata={"help": "whether to use LoRA"})
+    lora_r: int = field(default=8, metadata={"help": "hidden dimension for LoRA"})
+    lora_alpha: int = field(default=32, metadata={"help": "alpha for LoRA"})
+    lora_dropout: float = field(default=0.05, metadata={"help": "dropout rate for LoRA"})
+    lora_target_modules: str = field(default="query,value", metadata={"help": "where to perform LoRA"})
+
+
+@dataclass
+class DataArguments:
+    data_path: str = field(default=None, metadata={"help": "Path to the training data."})
+    kmer: int = field(default=-1, metadata={"help": "k-mer for input sequence. -1 means not using k-mer."})
+
+
+@dataclass
+class TrainingArguments(transformers.TrainingArguments):
+    cache_dir: Optional[str] = field(default=None)
+    run_name: str = field(default="run")
+    optim: str = field(default="adamw_torch")
+    model_max_length: int = field(default=512, metadata={"help": "Maximum sequence length."})
+    gradient_accumulation_steps: int = field(default=1)
+    per_device_train_batch_size: int = field(default=1)
+    per_device_eval_batch_size: int = field(default=1)
+    num_train_epochs: int = field(default=1)
+    fp16: bool = field(default=False)
+    logging_steps: int = field(default=100)
+    log_csv_path: str = field(default="log.csv") # I added this
+    save_steps: int = field(default=100)
+    eval_steps: int = field(default=100)
+    evaluation_strategy: str = field(default="steps")
+    warmup_steps: int = field(default=50)
+    weight_decay: float = field(default=0.01)
+    learning_rate: float = field(default=1e-4)
+    save_total_limit: int = field(default=3)
+    load_best_model_at_end: bool = field(default=True) 
+    output_dir: str = field(default="output")
+    find_unused_parameters: bool = field(default=False)
+    checkpointing: bool = field(default=False)
+    dataloader_pin_memory: bool = field(default=False)
+    eval_and_save_results: bool = field(default=True)
+    save_model: bool = field(default=False)
+    seed: int = field(default=42)
+    metric_for_best_model: str = field(default="r2")
+    greater_is_better: bool = field(default=True)
+
+    
+def validate_batch_inputs(inputs, tokenizer, max_length, batch_idx=None):
+    """
+    Check for NaNs/Infs in labels and overly long sequences.
+    """
+    if "labels" in inputs:
+        labels = inputs["labels"]
+        if torch.isnan(labels).any():
+            raise ValueError(f"Found NaNs in labels (batch {batch_idx}).")
+        if torch.isinf(labels).any():
+            raise ValueError(f"Found Infs in labels (batch {batch_idx}).")
+    input_ids = inputs["input_ids"]
+    if input_ids.shape[1] > max_length:
+        raise ValueError(
+            f"Sequence length ({input_ids.shape[1]}) exceeds model_max_length={max_length} (batch {batch_idx})."
+        )
+
+
+def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
+    """Collects the state dict and dump to disk."""
+    state_dict = trainer.model.state_dict()
+    if trainer.args.should_save:
+        cpu_state_dict = {key: value.cpu() for key, value in state_dict.items()}
+        del state_dict
+        trainer._save(output_dir, state_dict=cpu_state_dict)  # noqa
+
+
+"""
+Get the reversed complement of the original DNA sequence.
+"""
+def get_alter_of_dna_sequence(sequence: str):
+    MAP = {"A": "T", "T": "A", "C": "G", "G": "C"}
+    # return "".join([MAP[c] for c in reversed(sequence)])
+    return "".join([MAP[c] for c in sequence])
+
+"""
+Transform a dna sequence to k-mer string
+"""
+def generate_kmer_str(sequence: str, k: int) -> str:
+    """Generate k-mer string from DNA sequence."""
+    return " ".join([sequence[i:i+k] for i in range(0, len(sequence) - k + 1, k)])  # non-overlapping
+
+
+"""
+Load or generate k-mer string for each DNA sequence. The generated k-mer string will be saved to the same directory as the original data with the same name but with a suffix of "_{k}mer".
+"""
+def load_or_generate_kmer(data_path: str, texts: List[str], k: int) -> List[str]:
+    """Load or generate k-mer string for each DNA sequence."""
+    kmer_path = data_path.replace(".csv", f"_{k}mer.json")
+    if os.path.exists(kmer_path):
+        logging.warning(f"Loading k-mer from {kmer_path}...")
+        with open(kmer_path, "r") as f:
+            kmer = json.load(f)
+    else:        
+        logging.warning(f"Generating k-mer...")
+        kmer = [generate_kmer_str(text, k) for text in texts]
+        with open(kmer_path, "w") as f:
+            logging.warning(f"Saving k-mer to {kmer_path}...")
+            json.dump(kmer, f)
+        
+    return kmer
+
+class SupervisedDataset(Dataset):
+    """Dataset for supervised fine-tuning."""
+
+    def __init__(self, 
+                 data_path: str, 
+                 tokenizer: transformers.PreTrainedTokenizer, 
+                 kmer: int = -1):
+
+        super(SupervisedDataset, self).__init__()
+
+        # load data from the disk
+        with open(data_path, "r") as f:
+            data = list(csv.reader(f))[1:]
+        if len(data[0]) == 2:
+            # data is in the format of [text, label]
+            logging.warning("Perform single sequence classification...")
+            texts = [d[0] for d in data]
+            labels = [float(d[1]) for d in data] # I have removed the int(d[1]) for regression? 
+        elif len(data[0]) == 3:
+            # data is in the format of [text1, text2, label]
+            logging.warning("Perform sequence-pair classification...")
+            texts = [[d[0], d[1]] for d in data]
+            labels = [int(d[2]) for d in data]
+        else:
+            raise ValueError("Data format not supported.")
+        
+        if kmer != -1:
+            # only write file on the first process
+            if torch.distributed.get_rank() not in [0, -1]:
+                torch.distributed.barrier()
+
+            logging.warning(f"Using {kmer}-mer as input...")
+            texts = load_or_generate_kmer(data_path, texts, kmer)
+
+            if torch.distributed.get_rank() == 0:
+                torch.distributed.barrier()
+
+        output = tokenizer(
+            texts,
+            return_tensors="pt",
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            truncation=True,
+        )
+        self.input_ids = output["input_ids"]
+        self.attention_mask = output["attention_mask"]
+        self.labels = labels
+        self.num_labels = len(set(labels))
+
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, i) -> Dict[str, torch.Tensor]:
+        return dict(input_ids=self.input_ids[i], labels=self.labels[i])
+
+
+@dataclass
+class DataCollatorForSupervisedDataset(object):
+    """Collate examples for supervised fine-tuning."""
+
+    tokenizer: transformers.PreTrainedTokenizer
+
+    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
+        input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
+        )
+        labels = torch.Tensor(labels).float() # Changed from labels = torch.Tensor(labels).long() to labels = torch.Tensor(labels).float() because of https://github.com/MAGICS-LAB/DNABERT_2/issues/79 
+        return dict(
+            input_ids=input_ids,
+            labels=labels,
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+        )
+
+
+"""
+Compute metrics used for huggingface trainer.
+""" 
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    # Commented out code was orriginal. 
+    #if isinstance(logits, tuple):  # Unpack logits if it's a tuple
+    #    logits = logits[0]
+    #return calculate_metric_with_sklearn(logits, labels)
+    logits = logits.flatten()  # Flatten logits for regression
+    labels = labels.flatten()  # Flatten labels for regression
+    mse = mean_squared_error(labels, logits)
+    mae = mean_absolute_error(labels, logits)
+    r2 = r2_score(labels, logits)
+    rmse = np.sqrt(mse)
+    return {
+        "mse": mse,
+        "mae": mae,
+        "r2": r2,
+        "rmse": rmse
+    }
+
+def model_init():
+    # load model
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        num_labels=train_dataset.num_labels,
+        trust_remote_code=True,
+    )
+    model.config.problem_type = "regression"       
+    return model
+
+def debug_print_batch(inputs, tokenizer, batch_idx):
+    input_ids = inputs["input_ids"]
+    attn_mask = inputs["attention_mask"]
+    labels = inputs["labels"]
+
+    if torch.isnan(labels).any() or torch.isinf(labels).any():
+        print(f"[Batch {batch_idx}] NaN/Inf in labels")
+
+    if input_ids.dtype != torch.long:
+        print(f"[Batch {batch_idx}] input_ids wrong dtype: {input_ids.dtype}")
+    if attn_mask.dtype != torch.long:
+        print(f"[Batch {batch_idx}] attn_mask wrong dtype: {attn_mask.dtype}")
+
+    if torch.any(input_ids < 0):
+        print(f"[Batch {batch_idx}] input_ids contain negative values")
+
+    tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+    print(f"[Batch {batch_idx}] First sequence tokens:\n{tokens}")
+
+def train():
+    parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        use_fast=True,
+        trust_remote_code=True,
+    )
+    tokenizer.model_max_length = training_args.model_max_length  # Force it manually
+    print(f"[DEBUG] Tokenizer model_max_length = {tokenizer.model_max_length}")
+    if "InstaDeepAI" in model_args.model_name_or_path:
+        tokenizer.eos_token = tokenizer.pad_token
+    train_dataset = SupervisedDataset(tokenizer=tokenizer, 
+                                      data_path=os.path.join(data_args.data_path, "train.csv"), 
+                                      kmer=data_args.kmer)
+    val_dataset = SupervisedDataset(tokenizer=tokenizer, 
+                                     data_path=os.path.join(data_args.data_path, "dev.csv"), 
+                                     kmer=data_args.kmer)
+    test_dataset = SupervisedDataset(tokenizer=tokenizer, 
+                                     data_path=os.path.join(data_args.data_path, "test.csv"), 
+                                     kmer=data_args.kmer)
+    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        num_labels=1, # changed from num_labels=train_dataset.num_labels, to 1 https://github.com/MAGICS-LAB/DNABERT_2/issues/79
+        trust_remote_code=True,
+    )
+    model.config.problem_type = "regression"
+    if model_args.use_lora:
+        lora_config = LoraConfig(
+            r=model_args.lora_r,
+            lora_alpha=model_args.lora_alpha,
+            target_modules=list(model_args.lora_target_modules.split(",")),
+            lora_dropout=model_args.lora_dropout,
+            bias="none",
+            task_type="SEQ_CLS",
+            inference_mode=False,
+        )
+        model = get_peft_model(model, lora_config)
+        model.print_trainable_parameters()
+
+    # define trainer
+    set_seed(42) # this added here, hopefully should make it reproducible?
+    trainer = transformers.Trainer(model=model, # Can I add model_init=model_init I added this for reproducibility? 
+                                   tokenizer=tokenizer,
+                                   args=training_args,
+                                   compute_metrics=compute_metrics,
+                                   train_dataset=train_dataset,
+                                   eval_dataset=val_dataset,
+                                   data_collator=data_collator,
+                                   callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]) # I can add callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
+    for idx, batch in enumerate(train_dataset):
+        inputs = data_collator([batch])
+        validate_batch_inputs(inputs, tokenizer, training_args.model_max_length, batch_idx=idx)
+        debug_print_batch(inputs, tokenizer, idx)
+        if idx == 5:  # Only validate a few batches unless you want to validate the full dataset
+            break
+    print(f"Using loss function: {trainer.model.config.problem_type}")
+    trainer.train()
+    if training_args.save_model:
+        trainer.save_state()
+        safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
+    if training_args.eval_and_save_results:
+        results_path = os.path.join(training_args.output_dir, "results", training_args.run_name)
+        results = trainer.evaluate(eval_dataset=test_dataset)
+        os.makedirs(results_path, exist_ok=True)
+        with open(os.path.join(results_path, "eval_results.json"), "w") as f:
+            json.dump(results, f)
+    
+    log_history = pd.DataFrame(trainer.state.log_history) # I added this
+    log_history.to_csv(training_args.log_csv_path, index=False)   # I added this
+
+
+    print(f'Now current is {torch.cuda.current_device}')
+
+def predict(model_args=None, data_args=None, training_args=None):
+    if model_args is None or data_args is None or training_args is None:
+        parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        model_max_length=training_args.model_max_length,
+        padding_side="right",
+        use_fast=True,
+        trust_remote_code=True,)
+
+    test_dataset = SupervisedDataset(
+        tokenizer=tokenizer,
+        data_path=os.path.join(data_args.data_path, "test.csv"),
+        kmer=data_args.kmer
+    )
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_args.model_name_or_path,
+        cache_dir=training_args.cache_dir,
+        num_labels=1,
+        trust_remote_code=True)
+    model.config.problem_type = "regression"
+
+    trainer = transformers.Trainer(
+        model=model,
+        tokenizer=tokenizer,
+        args=training_args
+    )
+
+    print("Running prediction on test set...")
+    predictions = trainer.predict(test_dataset)
+    preds = predictions.predictions.flatten()
+    labels = np.array(test_dataset.labels)
+
+    input_texts = []
+    with open(os.path.join(data_args.data_path, "test.csv"), "r") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            input_texts.append(row[0])
+
+    pred_output_path = os.path.join(training_args.output_dir, "results", training_args.run_name)
+    os.makedirs(pred_output_path, exist_ok=True)
+    output_csv = os.path.join(pred_output_path, "test_predictions.csv")
+
+    with open(output_csv, "w", newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Input", "TrueLabel", "Prediction"])
+        for text, label, pred in zip(input_texts, labels, preds):
+            writer.writerow([text, label, pred])
+
+    mse = mean_squared_error(labels, preds)
+    mae = mean_absolute_error(labels, preds)
+    r2 = r2_score(labels, preds)
+    print(f"\nPrediction complete.\nMSE: {mse:.4f}, MAE: {mae:.4f}, R2: {r2:.4f}")
+    print(f"Predictions saved to: {output_csv}")
+
+
+if __name__ == "__main__":
+    #set_cuda_device()
+    train()
+    #predict(
+    #    model_args=ModelArguments(
+    #        model_name_or_path="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/filtering_out_low/soy_1500up_0down_42_log2plus1/lr_3e-4_r_32_alpha_32_dropout_0.3/checkpoint-5350",
+    #        use_lora=True  # if you trained with LoRA
+    #    ),
+    #    data_args=DataArguments(
+    #        data_path="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/Soy_expression_prediction/intermediate_data/filtering_out_low/soy_1500up_0down_42_log2plus1",  # should contain test.csv
+    #        kmer=6  # or whatever k you used in training
+    #    ),
+    #    training_args=TrainingArguments(
+    #        output_dir="../intermediate_data/predictions_output",
+    #        run_name="checkpoint-5350-eval",
+    #        per_device_eval_batch_size=1,
+    #        dataloader_pin_memory=False,
+    #        report_to=[],
+    #        disable_tqdm=False,
+    #        logging_dir="logs"
+    #    ))
+
+
