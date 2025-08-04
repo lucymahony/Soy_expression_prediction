@@ -123,21 +123,26 @@ def plot_different_experiments(experiment_1, experiment_2, out_file_path, log=Fa
     
     # Calculate Pearson correlation
     pearson_corr, p_value = pearsonr(x, y)
-
+    print(f'The pearson_coor is {pearson_corr} with p_value {p_value}')
 
     # Now the tests have passed can plot the average expression value across the replicates in expression matrix 1 to matrix 2. 
     fig, ax = plt.subplots(figsize=(5.7, 5.7))
-    sns.regplot(x = x, y = y, color='blue',  ci=None)
     ax.grid(False)
     if log:
         ax.set_xscale("log")
         ax.set_yscale("log")
-
-    ax.set_xlabel(experiment_1['name']+ ' expression values (TPM)')
-    ax.set_ylabel(experiment_2['name']+ ' expression values (TPM)')
-    plt.title('Expression Values of ' + str(experiment_1['name']) + ', plotted against ' + str(experiment_2['name']))
-    ax.text(x.min(), y.max(), 'Pearson r = {:.2f}'.format(pearson_corr), horizontalalignment='right', verticalalignment='top', fontsize=12, color='black')
-    plt.savefig(out_file_path)
+    ax.scatter(x, y,s=0.2)
+    ax.set_xlabel(experiment_1['name']+ '\n expression values (TPM)',fontsize=20)
+    ax.set_ylabel(experiment_2['name']+ '\n expression values (TPM)', fontsize=20)
+    #plt.title('Expression Values of ' + str(experiment_1['name']) + ', plotted against ' + str(experiment_2['name']))
+    ax.text(0.95, 0.05, f'r={pearson_corr:.3f}',
+        transform=ax.transAxes,  # use axes coordinates
+        horizontalalignment='right',
+        verticalalignment='bottom',
+        fontsize=20, color='black')
+    sns.despine()
+    plt.tight_layout()
+    plt.savefig(out_file_path, dpi=900)
 
 
 def plot_different_experiments_with_thresholds(experiment_1, experiment_2, out_file_path, log=False, threshold=1):
@@ -187,8 +192,8 @@ def plot_different_experiments_with_thresholds(experiment_1, experiment_2, out_f
     fig, ax = plt.subplots(figsize=(5.7, 5.7))
 
     # Plot points
-    ax.scatter(x[~above_threshold_mask], y[~above_threshold_mask], color='grey', s=10, label='Below threshold')
-    ax.scatter(x_filtered, y_filtered, color='royalblue', s=10, label='Above threshold')
+    ax.scatter(x[~above_threshold_mask], y[~above_threshold_mask], color='grey', s=0.2, label='Below threshold')
+    ax.scatter(x_filtered, y_filtered, color='royalblue', s=0.2, label='Above threshold')
 
     # Plot regression line (log-log space)
     ax.plot(regression_x_vals, regression_y_vals, '--', color='black', lw=1.5, label='Log-log regression')
@@ -332,15 +337,15 @@ def ma_plot_boxplot(experiment_dict, out_file_path, title='MA plot', transform=F
     # Create the plot with box plots for each bin of A
     fig, ax = plt.subplots(figsize=(5.7, 5.7), dpi=900)
     sns.boxplot(x='A_bin', y='M', data=tpm_matrix, ax=ax, boxprops=dict(facecolor='#0f62fe', edgecolor='#6f6f6f',)) #blue60
-    ax.axhline(y=1, color='#c6c6c6', linestyle='--', zorder=10) # grey30 
-    ax.axhline(y=-1, color='#c6c6c6', linestyle='--', zorder=20)
+    #ax.axhline(y=1, color='#c6c6c6', linestyle='--', zorder=10) 
+    #ax.axhline(y=-1, color='#c6c6c6', linestyle='--', zorder=20)
     # Add vertical line at a = -1 as log2(0.5) = -1
     xticks = sorted(tpm_matrix['A_bin'].unique())
-    try:
-        x_pos = xticks.index(-1)
-        ax.axvline(x=x_pos, color='#da1e28', linestyle='--', zorder=30) # red60
-    except ValueError:
-        print("No A_bin = -1 in the data.")
+    #try:
+    #    x_pos = xticks.index(-1)
+    #    ax.axvline(x=x_pos, color='#da1e28', linestyle='--', zorder=30) # red60
+    #except ValueError:
+    #    print("No A_bin = -1 in the data.")
 
     ax.set_xlabel('A (Log2 Average)', fontsize=20)
     ax.set_ylabel('M (Log2 Ratio)', fontsize=20)
@@ -358,7 +363,7 @@ def ma_plot_boxplot(experiment_dict, out_file_path, title='MA plot', transform=F
 
 
 
-def filter_for_stable_genes(merged,output_data_path,log=False):
+def filter_for_stable_genes(merged,output_data_path,log=False, text=False, title=False):
     #Input = merged average expression matrixes from the two experiments
     print(f'There are {merged.shape[0]} genes in the merged matrix')
     
@@ -403,16 +408,19 @@ def filter_for_stable_genes(merged,output_data_path,log=False):
             ax.set_xscale("log")
             ax.set_yscale("log")
 
-        ax.scatter(merged['Mean_expression_huang'], merged['Mean_expression_wang'], color='grey', s=10)
-        ax.scatter(stable_genes_df['Mean_expression_huang'], stable_genes_df['Mean_expression_wang'], color='blue', s=10)
-        ax.set_xlabel('Mean Expression Huang')
-        ax.set_ylabel('Mean Expression Wang')
-        ax.set_title(f'Stable Genes Scatter Plot: {filter}')
-
-        ax.text(0.001, 10000, f'Pearson All r = {pearson_corr_all:.4f}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
-        ax.text(0.001, 5623, f'Pearson stable = {pearson_corr_stable:.4f}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
-        ax.text(0.001, 3200, f'Number of stable genes = {stable_genes.shape[0]}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
+        ax.scatter(merged['Mean_expression_huang'], merged['Mean_expression_wang'], color='grey', s=0.2)
+        ax.scatter(stable_genes_df['Mean_expression_huang'], stable_genes_df['Mean_expression_wang'], color='blue', s=0.2)
+        ax.set_xlabel('Mean expression values (TPM)\n Huang et al., 2022',fontsize=20)
+        ax.set_ylabel('Mean expression values (TPM)\n Wuang et al., 2021',fontsize=20)
+        if title:
+            ax.set_title(f'Stable Genes Scatter Plot: {filter}')
+        if text:
+            ax.text(0.001, 10000, f'Pearson All r = {pearson_corr_all:.4f}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
+            ax.text(0.001, 5623, f'Pearson stable = {pearson_corr_stable:.4f}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
+            ax.text(0.001, 3200, f'Number of stable genes = {stable_genes.shape[0]}', horizontalalignment='left', verticalalignment='top', fontsize=12, color='black')
         file_path = output_data_path + f'stable_genes_scatter{filter[:2]}.png'
+        sns.despine()
+        plt.tight_layout()
         plt.savefig(file_path, dpi=900)
         print(f'Figure saved to {file_path}')
     # save stable_genes = stability_df.query(filter) "CV < 0.2" to a csv file 
@@ -463,16 +471,24 @@ if __name__ == "__main__":
     #ma_plot_boxplot(huang, f'{output_data_path}/huang_ma_box_plot.png', title='', transform=False)
 
     #ma_plot_boxplot(wang, f'{output_data_path}/wang_ma_box_plot.png', title='', transform=False)
-        # Save the average expression matricies 
+    
+    # Save the average expression matricies 
     #huang_average = (huang['average_matrix']).to_csv(f'{output_data_path}/average_huang_TPM.tsv', index=False, sep = '\t')
     #wang_average = (wang['average_matrix']).to_csv(f'{output_data_path}/average_wang_TPM.tsv', index=False, sep = '\t')
     #plot_replicates(wang['tpm_matrix'], wang['s_numbers'][0], wang['s_numbers'][1], f'{output_data_path}scatter_wang.png', log=True)
     #plot_replicates(huang['tpm_matrix'], huang['s_numbers'][0], huang['s_numbers'][1], f'{output_data_path}scatter_huang.png', log=True)
-    plot_different_experiments_with_thresholds(huang, wang, f'{output_data_path}scatter_wang_against_huang.png', log=True)
+    plot_different_experiments(huang, wang, f'{output_data_path}simple_scatter_wang_against_huang.png', log=True)
+    #plot_different_experiments_with_thresholds(huang, wang, f'{output_data_path}scatter_wang_against_huang.png', log=True)
     #plot_different_experiments_with_thresholds(huang, wang, f'{output_data_path}scatter_wang_against_huang.png', log=True)
 
-    #merged_matrix = pd.merge(huang['average_matrix'], wang['average_matrix'], on='Gene', suffixes=('_huang', '_wang'))
-    #filter_for_stable_genes(merged_matrix, output_data_path, log=True)
+    merged_matrix = pd.merge(huang['average_matrix'], wang['average_matrix'], on='Gene', suffixes=('_huang', '_wang'))
+    filter_for_stable_genes(merged_matrix, output_data_path, log=True)
 
-    violin_plot_filtered_(wang, f'{output_data_path}/wang_violin_plot.png')
+    #violin_plot_filtered_(wang, f'{output_data_path}/wang_violin_plot.png')
+
+
+
+
+
+
 

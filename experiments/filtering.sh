@@ -14,7 +14,7 @@ mamba activate transformers_py310_3
 
 MODEL_NAME="/ei/projects/c/c3109f4b-0db1-43ec-8cb5-df48d8ea89d0/scratch/repos/dnabert/agro-nucleotide-transformer-1b"
 PYTHON_SCRIPT="../ml_scripts/agront_train_ia3.py"
-OUTPUT_BASE="../intermediate_data/filtering_experiment_ia3/"
+OUTPUT_BASE="../intermediate_data/filtering_experiment_lora/"
 mkdir -p "$OUTPUT_BASE"
 
 dataset_dirs=(

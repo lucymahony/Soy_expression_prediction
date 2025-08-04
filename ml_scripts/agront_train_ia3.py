@@ -97,11 +97,18 @@ if __name__ == "__main__":
         print(f"\nFinal validation R²: {metrics['eval_r2']:.4f}")
 
         best_checkpoint = trainer.state.best_model_checkpoint
+        
+
         if best_checkpoint:
+            final_model_path=os.path.join(args.output_dir, f"best_model_lr{args.learning_rate}_bs{args.batch_size}")
             print(f"\nSaving best model from: {best_checkpoint}")
-            model.save_pretrained(os.path.join(
-                args.output_dir,
-                f"best_model_lr{args.learning_rate}_bs{args.batch_size}"
-            ))
+            model.save_pretrained(final_model_path)
+            # Merge adapter with base model and save full model
+            print("Merging adapter weights into base model...")
+            final_model_path_merged=os.path.join(final_model_path, 'merged_to_full')
+            merged_model = model.merge_and_unload()
+            merged_model.save_pretrained(final_model_path_merged)
+            tokenizer.save_pretrained(final_model_path_merged)
+            print(f"Saved full model to {final_model_path_merged}")
         else:
             print("No best checkpoint found, skipping save.")
