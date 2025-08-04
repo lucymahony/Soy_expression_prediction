@@ -1,2 +1,0 @@
-Running training for: LR=0.0003, WD=0.001, Epochs=5, Batch=8, Gradient_accumulation=10, Warmup=10, Target_modules="['esm.encoder.layer.38.attention.self.key', Feedforward_modules= 'esm.encoder.layer.38.attention.self.value', 'esm.encoder.layer.39.attention.self.key', 'esm.encoder.layer.39.attention.self.value', 'esm.encoder.layer.38.output.dense', 'esm.encoder.layer.39.output.dense']","['esm.encoder.layer.38.output.dense', 'esm.encoder.layer.39.output.dense']"
-Hyperparameter search completed!
