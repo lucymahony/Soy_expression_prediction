@@ -13,16 +13,16 @@ In `data_preprocessing`
 2. ia3_cv.sh - Fine tuning using IA3
 3. head_cv.sh - Fine tuning head only
 
-4. filtering.sh - Runs IA3 fine tuning on input datasets that have been filtered based on different input TPM criteria. 
-5. variable_sequence_lengths.py - Runs IA3 fine tuning on different input sequence lengths
-6. hyperparameter_tuning.sh - Grid searching IA3 fine tuning with different hyperparameters. 
+4. filtering_lora.sh - Runs LoRA fine tuning on input datasets that have been filtered based on different input TPM criteria. 
+5. lora_variable_sequence_lengths.sh - Runs LoRA fine tuning on different input sequence lengths
+6. hyperparameter_tuning_lora.sh - Grid searching LoRA fine tuning with different hyperparameters. 
 
 
 # Plot experiment results
 In `plot_results`
 1.  head_vs_ia3_comparison.py - comparing different training methods
 2.  plot_filtering_results.py - comparing different data processing filtering of input genes
-3.  plot_hyperparameters.py - results of diff ia3 parameters
+3.  plot_hyperparameters.py - results of diff hyperparameters
 4.  plot_loss_over_training
 
 # Predict Expression Values 
