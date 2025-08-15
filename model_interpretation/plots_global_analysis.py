@@ -36,8 +36,6 @@ def readin_attention(filepath, max_length=6000):
     print(df.shape)
     return df
 
-df = readin_attention('glycine_max_test_attention.csv')
-
 
 def plot_average_attention_over_length(df):
     all_attentions = []
@@ -102,8 +100,14 @@ def plot_average_attention_over_length_2(df, title="Average Attention per Positi
                      color='skyblue', alpha=0.3, label='±1 SD')
 
     # Mark peaks if desired
-    max_idx = np.argmax(avg_attention)
-    plt.scatter([max_idx], [avg_attention[max_idx]], color='red', s=60, label='Max Attention')
+    #max_idx = np.argmax(avg_attention)
+    #plt.scatter([max_idx], [avg_attention[max_idx]], color='red', s=60, label='Max Attention')
+
+    # Custom x ticks 
+    tick_positions = [0, 1000, 2000, 3000, 4000, 5000, 6000] 
+    tick_labels = ['-1000', 'TSS', '1000', '2000', '3000', '4000', '5000']
+
+    plt.xticks(tick_positions, tick_labels)
 
     # Labels and style
     plt.title(title, fontsize=14, fontweight='bold', pad=15)
@@ -123,5 +127,9 @@ def plot_average_attention_over_length_2(df, title="Average Attention per Positi
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.show()
 
-
-plot_average_attention_over_length_2(df, title="Average Attention per Position in Glycine max", save_path='average_attention_per_position_glycine_max.png')
+if __name__ == "__main__":
+    #df = readin_attention('glycine_max_test_attention.csv')
+    #df = readin_attention('glycine_max_test_attention_lr_3e-5_checkpoint-18856_optim.csv')
+    #plot_average_attention_over_length_2(df, title="", save_path='average_attention_per_position_glycine_max.png')
+    df = readin_attention('../intermediate_data/hyperparameter_tuning_lora/lora_r16.0_a16.0_d0.01_lr3e-04/best_model_lr0.0003_bs8/attention.csv')
+    plot_average_attention_over_length_2(df, title="", save_path='average_attention_test.png')

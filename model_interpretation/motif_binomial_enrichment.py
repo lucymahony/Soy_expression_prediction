@@ -109,7 +109,6 @@ def read_in_attention_data(file_path):
 
 if __name__ == '__main__':
     df = read_in_attention_data('glycine_max_test_attention_lr_3e-5_checkpoint-18856_optim.csv')
-    
     log_thresholds = np.logspace(np.log10(0.1), np.log10(20), num=10)
     results = count_enriched_motifs_at_thresholds(df, k=6, thresholds=log_thresholds, cutoff=0.05)
     plot_enriched_motifs_vs_threshold(results, output_file='motif_enrichment_curve.pdf')
